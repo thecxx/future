@@ -1,6 +1,7 @@
 // Package future provides a Future type that correlates async work with unique IDs (integer or string).
 // Promise registers a pending result, Complete delivers it, and the returned await function blocks until then.
-// IDs are derived from github.com/google/uuid (string form or high bits of a random UUID).
+// IDs come from github.com/google/uuid: string form, the first 8 random bytes for 64-bit integer types,
+// UUID.ID() for 32-bit integer types, and int follows the width of the platform.
 package future
 
 import (
@@ -56,7 +57,9 @@ func WithTimeout(timeout time.Duration) PromiseOption {
 
 // Promise starts one async operation: it generates a unique ID, registers a pending entry,
 // invokes fn(id) so the caller can start work (e.g. fire a request), and returns await.
-// await blocks until the async operation is completed or ctx is canceled.
+// await blocks until the async operation is completed or ctx is canceled; if completion and
+// cancellation happen together, the completed value is returned. Call await at least once so
+// the registration is removed from the Future (otherwise the entry is leaked).
 func (f *Future[I, T]) Promise(ctx context.Context, fn func(ID I), opts ...PromiseOption) (await func() (T, error)) {
 	var options PromiseOptions
 	for _, opt := range opts {
@@ -101,11 +104,16 @@ func (f *Future[I, T]) Promise(ctx context.Context, fn func(ID I), opts ...Promi
 			f.mutex.Unlock()
 		}()
 		select {
-		// Return the context error if the context is done.
+		// Context is done, return the context error if the context is done.
 		case <-ctx.Done():
-			var zero T
-			return zero, ctx.Err()
-			// Wait for the pending operation to complete.
+			select {
+			case <-pd.done:
+				return pd.value, pd.err
+			default:
+				var zero T
+				return zero, ctx.Err()
+			}
+		// Completion is ready, return the completed value and error.
 		case <-pd.done:
 			return pd.value, pd.err
 		}
