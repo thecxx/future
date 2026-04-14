@@ -1,0 +1,27 @@
+# System
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDEs
+/*.iml
+/.idea/
+/.vscode/
+/.cursor/
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Others
+*.log
+*.tmp
+*.test
+*.out
+
+# Dependency directories
+/vendor/
