@@ -1,4 +1,5 @@
 // Package future provides a Future type that correlates async work with unique IDs (integer or string).
+// A zero Future is valid; use NewFuture only if you want a preallocated map.
 // Promise registers a pending result, Complete delivers it, and the returned await function blocks until then.
 // IDs come from github.com/google/uuid: string form, the first 8 random bytes for 64-bit integer types,
 // UUID.ID() for 32-bit integer types, and int follows the width of the platform.
@@ -34,12 +35,14 @@ type pending[T any] struct {
 }
 
 // Future correlates in-flight async operations by unique IDs.
+// The zero value is ready to use; the task map is allocated on the first Promise.
 type Future[I FutureID, T any] struct {
 	tasks map[I]*pending[T]
 	mutex sync.RWMutex
 }
 
-// NewFuture returns an empty Future.
+// NewFuture returns an empty Future with its task map preallocated.
+// Callers may use a zero Future[I, T] instead; NewFuture is optional.
 func NewFuture[I FutureID, T any]() *Future[I, T] {
 	return &Future[I, T]{tasks: make(map[I]*pending[T])}
 }
@@ -84,6 +87,9 @@ func (f *Future[I, T]) Promise(ctx context.Context, fn func(ID I), opts ...Promi
 	}
 
 	f.mutex.Lock()
+	if f.tasks == nil {
+		f.tasks = make(map[I]*pending[T])
+	}
 	f.tasks[ID] = pd
 	f.mutex.Unlock()
 
